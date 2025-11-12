@@ -1,0 +1,27 @@
+{
+  "report_date": "{{ ansible_date_time.date }}",
+  "system_info": {
+    "hostname": "{{ ansible_facts.hostname }}",
+    "cpu_cores": {{ ansible_facts.processor_vcpus }},
+    "os_version": "{{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}"
+  },
+  "resource_check": {
+    "memory_usage_percent": "{{ memory_usage_percent }}",
+    "disk_details": [
+        {% for item in ansible_facts.mounts %}
+        {% set usage_pct = (((item.size_total - item.size_available) | float / item.size_total | float) * 100) | round(2) %}
+        {
+            "mount": "{{ item.mount }}",
+            "size_total_gb": {{ (item.size_total / (1024*1024*1024)) | round(2) }},
+            "usage_percent": {{ usage_pct }},
+            "over_80_percent_alert": {{ (usage_pct > 80) | string }}  // <--- 문법 오류 해결
+        }{{ "," if not loop.last }}
+        {% endfor %}
+    ]
+  },
+  "service_status": {
+    "sshd": "{{ service_status.ansible_facts.services['sshd.service'].state | default('Not Found') }}",
+    "nginx": "{{ service_status.ansible_facts.services['nginx.service'].state | default('Not Found') }}"
+  },
+  "ping_status": "Successful"
+}

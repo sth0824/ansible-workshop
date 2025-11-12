@@ -1,0 +1,46 @@
+- name: 시스템 점검 (CPU/메모리/디스크/서비스/Ping)
+  hosts: rhel_server  # 사용자 환경에 맞춰 수정 완료
+  gather_facts: true
+
+  tasks:
+    # --- [월요일 작업: CPU/Mem] ---
+    - name: 1. 메모리 사용률(%) 계산 및 변수 저장
+      ansible.builtin.set_fact:
+        memory_usage_percent: "{{ ((ansible_facts.memtotal_mb - ansible_facts.memfree_mb) / ansible_facts.memtotal_mb * 100) | round(2) }}"
+
+    - name: 2. CPU/메모리 점검 결과 (Debug)
+      ansible.builtin.debug:
+        msg:
+          - "--- 1. CPU/메모리 점검 결과 ({{ ansible_facts.hostname }}) ---"
+          - "CPU Cores: {{ ansible_facts.processor_vcpus }}"
+          - "Total Memory: {{ ansible_facts.memtotal_mb }} MB"
+          - "Free Memory: {{ ansible_facts.memfree_mb }} MB"
+          - "Memory Usage: {{ memory_usage_percent }} %"
+
+    # --- [화요일 작업: Disk] ---
+    - name: 3. 디스크 사용률(%) 임계치(80%) 초과 시 경고
+      ansible.builtin.debug:
+        msg: "경고!! {{ item.mount }} 파티션 사용률 {{ (((item.size_total - item.size_available) | float / item.size_total | float) * 100) | round(2) }}% 입니다. (임계치 80% 초과)"
+      loop: "{{ ansible_facts.mounts }}"
+      when: (((item.size_total - item.size_available) | float / item.size_total | float) * 100) > 80
+
+    - name: 4. (참고) 모든 디스크 마운트 정보 출력
+      ansible.builtin.debug:
+        var: ansible_facts.mounts
+
+    # --- [수요일 작업: Service & Ping] ---
+    - name: 5. 서버 접근성(Ping) 최종 확인
+      ansible.builtin.ping:
+
+    # 6. 서비스 상태 점검을 위해 service_facts 모듈 사용 (강제 시작 방지)
+    - name: 6. 핵심 서비스 상태 점검 (sshd, nginx)
+      ansible.builtin.service_facts:
+      register: service_status
+
+    # 7. 서비스 점검 결과 확인 (Debug) - 상태 출력 로직 수정 완료
+    - name: 7. 서비스 점검 결과 확인 (Debug)
+      ansible.builtin.debug:
+        msg: "Service: {{ item }}, Status: {{ service_status.ansible_facts.services[item + '.service'].state | default('Not Found') }}"
+      loop:
+        - sshd
+        - nginx
